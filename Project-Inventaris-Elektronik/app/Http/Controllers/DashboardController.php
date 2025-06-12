@@ -4,11 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\Barang;
 use App\Models\Penjualan;
-use App\Models\DetailPenjualan; // Perlu untuk mengambil detail penjualan
+use App\Models\DetailPenjualan;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
-use Carbon\Carbon; // Untuk manipulasi tanggal
-use Illuminate\Support\Facades\DB; // <--- PASTIKAN BARIS INI ADA!
+use Carbon\Carbon;
+use Illuminate\Support\Facades\DB; // PASTIKAN BARIS INI ADA!
 
 class DashboardController extends Controller
 {
@@ -18,7 +18,7 @@ class DashboardController extends Controller
         $totalPenjualanHariIni = Penjualan::whereDate('tanggal_penjualan', today())->sum('total_harga');
         $barangTersediaCount = Barang::where('stok', '>', 0)->count();
 
-        // Produk terlaris bulan ini (placeholder lanjutan)
+        // Produk terlaris bulan ini
         $produkTerlarisBulanIni = 'Belum ada data';
         $topSellingItems = DetailPenjualan::select('barang_id', DB::raw('SUM(jumlah) as total_qty'))
             ->whereBetween('created_at', [Carbon::now()->startOfMonth(), Carbon::now()->endOfMonth()])
@@ -31,11 +31,9 @@ class DashboardController extends Controller
             $produkTerlarisBulanIni = $topSellingItems->barang->nama_barang . ' (' . $topSellingItems->total_qty . ' pcs)';
         }
 
-
-        // --- 2. Data untuk Grafik (Barang Masuk vs Barang Terjual) ---
+        // --- 2. Data untuk Grafik (Nilai Barang Masuk vs Nilai Barang Terjual) ---
         $chartPeriod = $request->input('chart_period', 'monthly');
-        $chartData = $this->getChartData($chartPeriod);
-
+        $chartData = $this->getChartData($chartPeriod); // Panggil metode yang sudah diperbarui
 
         // --- 3. Data untuk Tabel Terbaru ---
         $latestSoldItems = DetailPenjualan::orderBy('created_at', 'desc')
@@ -62,7 +60,6 @@ class DashboardController extends Controller
                 ];
             });
 
-
         return Inertia::render('Dashboard', [
             'totalPenjualanHariIni' => $totalPenjualanHariIni,
             'barangTersediaCount' => $barangTersediaCount,
@@ -74,6 +71,7 @@ class DashboardController extends Controller
         ]);
     }
 
+    // --- METODE GETCHARTDATA YANG SUDAH DIUBAH UNTUK MENGHITUNG NILAI RUPIAH ---
     private function getChartData($period)
     {
         $labels = [];
@@ -87,8 +85,10 @@ class DashboardController extends Controller
                     $date = $now->copy()->subDays($i);
                     $labels[] = $date->format('D, d M');
 
-                    $barangMasukData[] = Barang::whereDate('created_at', $date)->count();
-                    $barangTerjualData[] = DetailPenjualan::whereDate('created_at', $date)->sum('jumlah');
+                    // Hitung total nilai barang masuk (harga * stok)
+                    $barangMasukData[] = Barang::whereDate('created_at', $date)->sum(DB::raw('harga * stok'));
+                    // Hitung total nilai barang terjual (subtotal)
+                    $barangTerjualData[] = DetailPenjualan::whereDate('created_at', $date)->sum('subtotal');
                 }
                 break;
             case 'weekly':
@@ -99,8 +99,10 @@ class DashboardController extends Controller
 
                     $labels[] = $startOfWeek->format('d/m') . ' - ' . $endOfWeek->format('d/m');
 
-                    $barangMasukData[] = Barang::whereBetween('created_at', [$startOfWeek, $endOfWeek])->count();
-                    $barangTerjualData[] = DetailPenjualan::whereBetween('created_at', [$startOfWeek, $endOfWeek])->sum('jumlah');
+                    // Hitung total nilai barang masuk (harga * stok)
+                    $barangMasukData[] = Barang::whereBetween('created_at', [$startOfWeek, $endOfWeek])->sum(DB::raw('harga * stok'));
+                    // Hitung total nilai barang terjual (subtotal)
+                    $barangTerjualData[] = DetailPenjualan::whereBetween('created_at', [$startOfWeek, $endOfWeek])->sum('subtotal');
                 }
                 break;
             case 'monthly':
@@ -110,12 +112,14 @@ class DashboardController extends Controller
                     $month = $now->copy()->subMonths($i);
                     $labels[] = $month->format('M Y');
 
+                    // Hitung total nilai barang masuk (harga * stok)
                     $barangMasukData[] = Barang::whereMonth('created_at', $month->month)
                                                 ->whereYear('created_at', $month->year)
-                                                ->count();
+                                                ->sum(DB::raw('harga * stok'));
+                    // Hitung total nilai barang terjual (subtotal)
                     $barangTerjualData[] = DetailPenjualan::whereMonth('created_at', $month->month)
                                                           ->whereYear('created_at', $month->year)
-                                                          ->sum('jumlah');
+                                                          ->sum('subtotal');
                 }
                 break;
         }
@@ -124,14 +128,14 @@ class DashboardController extends Controller
             'labels' => $labels,
             'datasets' => [
                 [
-                    'label' => 'Barang Masuk',
+                    'label' => 'Total Nilai Barang Masuk', // Ubah label
                     'data' => $barangMasukData,
                     'backgroundColor' => 'rgba(75, 192, 192, 0.6)',
                     'borderColor' => 'rgba(75, 192, 192, 1)',
                     'borderWidth' => 1,
                 ],
                 [
-                    'label' => 'Barang Terjual',
+                    'label' => 'Total Nilai Barang Terjual', // Ubah label
                     'data' => $barangTerjualData,
                     'backgroundColor' => 'rgba(153, 102, 255, 0.6)',
                     'borderColor' => 'rgba(153, 102, 255, 1)',

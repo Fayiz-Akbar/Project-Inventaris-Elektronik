@@ -45,22 +45,51 @@ export default function Dashboard({
             },
             title: {
                 display: true,
-                text: "Barang Masuk vs Barang Terjual",
+                text: "Total Nilai Barang Masuk vs Total Nilai Barang Terjual",
             },
         },
         scales: {
             x: {
                 grid: {
-                    display: false, // Menghilangkan garis grid vertikal
+                    display: false,
                 },
             },
             y: {
                 beginAtZero: true,
                 grid: {
-                    color: "rgba(200, 200, 200, 0.2)", // Warna garis grid horizontal
+                    color: "rgba(200, 200, 200, 0.2)",
                 },
                 ticks: {
-                    stepSize: 1, // Agar y-axis menunjukkan angka bulat
+                    // --- Tambahkan baris ini ---
+                    stepSize: 25000000, // Menetapkan langkah setiap 25 juta
+                    // --- Akhir penambahan ---
+
+                    callback: function (value, index, ticks) {
+                        // Format nilai sebagai Rupiah
+                        if (value >= 1000000000) {
+                            // Jika miliar
+                            return (
+                                "Rp " +
+                                (value / 1000000000).toLocaleString("id-ID") +
+                                " Miliar"
+                            );
+                        } else if (value >= 1000000) {
+                            // Jika juta
+                            return (
+                                "Rp " +
+                                (value / 1000000).toLocaleString("id-ID") +
+                                " Juta"
+                            );
+                        } else if (value >= 1000) {
+                            // Jika ribu
+                            return (
+                                "Rp " +
+                                (value / 1000).toLocaleString("id-ID") +
+                                " Ribu"
+                            );
+                        }
+                        return "Rp " + value.toLocaleString("id-ID"); // Untuk nilai kecil
+                    },
                 },
             },
         },
