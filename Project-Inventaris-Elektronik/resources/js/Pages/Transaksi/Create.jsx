@@ -1,42 +1,43 @@
-// resources/js/Pages/Transaksi/Create.jsx (Setelah dipastikan nama dan lokasi file-nya)
-
-import React, { useState, useEffect } from "react"; // Pastikan useState dan useEffect diimpor
+// resources/js/Pages/Transaksi/Create.jsx
+import React, { useState, useEffect } from "react";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
-import { Head, usePage, useForm, Link } from "@inertiajs/react"; // Pastikan usePage dan Link diimpor
-
-// Import komponen UI yang diperlukan (Pastikan file-file ini ada di resources/js/Components/)
+import { Head, usePage, useForm, Link, router } from "@inertiajs/react"; // Pastikan router diimpor
 import PrimaryButton from "@/Components/PrimaryButton";
-import SecondaryButton from "@/Components/SecondaryButton"; // Digunakan untuk tombol Batal
-import DangerButton from "@/Components/DangerButton"; // Digunakan untuk tombol Hapus Item
-import TextInput from "@/Components/TextInput"; // Untuk input teks
-import InputLabel from "@/Components/InputLabel"; // Untuk label input
-import InputError from "@/Components/InputError"; // Untuk pesan error validasi
-import SelectInput from "@/Components/SelectInput"; // Untuk dropdown
+import SecondaryButton from "@/Components/SecondaryButton";
+import DangerButton from "@/Components/DangerButton";
+import TextInput from "@/Components/TextInput";
+import InputLabel from "@/Components/InputLabel";
+import InputError from "@/Components/InputError";
+import SelectInput from "@/Components/SelectInput";
+import Modal from "@/Components/Modal"; // Pastikan Modal diimpor
 
-// Import untuk notifikasi Toast (Pastikan react-toastify sudah diinstal)
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
 export default function Create({ auth, barangs, metodePembayarans, flash }) {
-    const { flash: pageFlash } = usePage().props; // Ambil flash messages dari Inertia
+    const { flash: pageFlash } = usePage().props;
 
     const { data, setData, post, processing, errors, reset } = useForm({
-        nama_pelanggan: "", // Tambahkan nama_pelanggan
+        nama_pelanggan: "",
         metode_pembayaran_id: "",
-        items: [{ barang_id: "", jumlah: 1, harga_satuan: 0, subtotal: 0 }], // Ubah 'id' menjadi 'barang_id', tambahkan harga_satuan, subtotal
+        items: [{ barang_id: "", jumlah: 1, harga_satuan: 0, subtotal: 0 }],
     });
 
-    // Effect untuk menampilkan toast messages dari flash
+    const [showingPaymentModal, setShowingPaymentModal] = useState(false); // State untuk modal pembayaran
+    const [transactionDetailsForPayment, setTransactionDetailsForPayment] =
+        useState(null); // Detail transaksi untuk ditampilkan di modal
+
     useEffect(() => {
         if (pageFlash && pageFlash.success) {
             toast.success(pageFlash.success);
+            // Auto-redirect ke halaman laporan setelah transaksi sukses
+            router.visit(route("laporan.penjualan")); // Redirect ke halaman laporan
         }
         if (pageFlash && pageFlash.error) {
             toast.error(pageFlash.error);
         }
     }, [pageFlash]);
 
-    // Fungsi untuk menambahkan item baru ke keranjang
     const addItem = () => {
         setData("items", [
             ...data.items,
@@ -44,39 +45,35 @@ export default function Create({ auth, barangs, metodePembayarans, flash }) {
         ]);
     };
 
-    // Fungsi untuk menghapus item dari keranjang
     const removeItem = (index) => {
-        // Pastikan selalu ada minimal 1 item jika form tidak boleh kosong
         if (data.items.length === 1) {
             setData("items", [
                 { barang_id: "", jumlah: 1, harga_satuan: 0, subtotal: 0 },
             ]);
         } else {
-            const newItems = data.items.filter((_, i) => i !== index);
-            setData("items", newItems);
+            setData(
+                "items",
+                data.items.filter((_, i) => i !== index)
+            );
         }
     };
 
-    // Fungsi untuk menangani perubahan pada item
     const handleItemChange = (index, field, value) => {
-        // Perbaiki parameter: (index, field, value)
         const newItems = [...data.items];
 
         if (field === "barang_id") {
-            // Sesuaikan dengan nama field di state 'barang_id'
             const selectedBarang = barangs.find(
                 (b) => b.id === parseInt(value)
             );
             if (selectedBarang) {
                 newItems[index] = {
                     ...newItems[index],
-                    barang_id: value, // Tetapkan barang_id
+                    barang_id: value,
                     harga_satuan: selectedBarang.harga,
-                    jumlah: 1, // Reset jumlah ke 1 saat barang dipilih
+                    jumlah: 1,
                     subtotal: selectedBarang.harga * 1,
                 };
             } else {
-                // Jika barang tidak ditemukan (misal: pilihan kosong)
                 newItems[index] = {
                     ...newItems[index],
                     barang_id: value,
@@ -88,10 +85,10 @@ export default function Create({ auth, barangs, metodePembayarans, flash }) {
         } else if (field === "jumlah") {
             const selectedBarang = barangs.find(
                 (b) => b.id === parseInt(newItems[index].barang_id)
-            ); // Cari barang berdasarkan barang_id yang sudah dipilih
-            const parsedJumlah = parseInt(value) || 0; // Pastikan jumlah adalah angka
+            );
+            const parsedJumlah = parseInt(value) || 0;
             const maxStok = selectedBarang ? selectedBarang.stok : 0;
-            const finalJumlah = Math.min(parsedJumlah, maxStok); // Batasi jumlah agar tidak melebihi stok
+            const finalJumlah = Math.min(parsedJumlah, maxStok);
 
             newItems[index] = {
                 ...newItems[index],
@@ -104,25 +101,39 @@ export default function Create({ auth, barangs, metodePembayarans, flash }) {
         setData("items", newItems);
     };
 
-    // Hitung total harga keseluruhan transaksi
     const calculateTotal = () => {
-        return data.items.reduce((sum, item) => sum + (item.subtotal || 0), 0); // Pastikan subtotal ada
+        return data.items.reduce((sum, item) => sum + (item.subtotal || 0), 0);
     };
 
+    // Fungsi yang dipanggil saat form utama disubmit (sebelum pembayaran)
     const handleSubmit = (e) => {
         e.preventDefault();
+        // Simpan detail transaksi sementara untuk modal pembayaran
+        setTransactionDetailsForPayment({
+            total: calculateTotal(),
+            metode:
+                metodePembayarans.find((m) => m.id == data.metode_pembayaran_id)
+                    ?.nama_metode || "Tidak Dipilih",
+            nama_pelanggan: data.nama_pelanggan || "Umum",
+        });
+        setShowingPaymentModal(true); // Tampilkan modal pembayaran
+    };
+
+    // Fungsi yang dipanggil saat konfirmasi pembayaran di modal
+    const handlePaymentConfirmation = () => {
+        setShowingPaymentModal(false); // Tutup modal pembayaran
+        // Kirim data transaksi ke backend
         post(route("transaksi.simpan"), {
-            // Pastikan rute ini benar
             onSuccess: () => {
-                // Reset form setelah sukses
-                reset("nama_pelanggan", "metode_pembayaran_id"); // Reset juga nama_pelanggan dan metode_pembayaran_id
+                // Flash message dan redirect akan ditangani oleh useEffect di atas
+                reset("nama_pelanggan", "metode_pembayaran_id");
                 setData("items", [
                     { barang_id: "", jumlah: 1, harga_satuan: 0, subtotal: 0 },
-                ]); // Reset item
+                ]);
             },
             onError: (validationErrors) => {
                 console.error("Validation Errors:", validationErrors);
-                // Toast message akan muncul dari useEffect flash
+                toast.error("Gagal memproses transaksi. Periksa input Anda."); // Tambahkan pesan error umum
             },
         });
     };
@@ -137,6 +148,7 @@ export default function Create({ auth, barangs, metodePembayarans, flash }) {
             }
         >
             <Head title="Transaksi Baru" />
+
             <div className="py-12">
                 <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
                     <div className="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6">
@@ -145,6 +157,8 @@ export default function Create({ auth, barangs, metodePembayarans, flash }) {
                         </h3>
 
                         <form onSubmit={handleSubmit}>
+                            {" "}
+                            {/* Submit form ini akan memicu modal pembayaran */}
                             {/* Informasi Pelanggan */}
                             <div className="mb-6">
                                 <InputLabel
@@ -169,7 +183,6 @@ export default function Create({ auth, barangs, metodePembayarans, flash }) {
                                     className="mt-2"
                                 />
                             </div>
-
                             {/* Pilihan Metode Pembayaran */}
                             <div className="mb-6">
                                 <InputLabel
@@ -206,7 +219,6 @@ export default function Create({ auth, barangs, metodePembayarans, flash }) {
                                     className="mt-2"
                                 />
                             </div>
-
                             {/* Daftar Item Transaksi */}
                             <div className="mb-6 border p-4 rounded-lg bg-gray-50">
                                 <h4 className="font-semibold text-gray-800 mb-4">
@@ -218,16 +230,14 @@ export default function Create({ auth, barangs, metodePembayarans, flash }) {
                                         className="flex flex-wrap items-center gap-4 mb-4 p-3 border-b border-gray-200 last:border-b-0"
                                     >
                                         <div className="flex-grow">
-                                            {" "}
-                                            {/* Gunakan flex-grow agar kolom barang lebih lebar */}
                                             <InputLabel
                                                 htmlFor={`barang_id_${index}`}
                                                 value="Barang"
                                             />
                                             <SelectInput
                                                 id={`barang_id_${index}`}
-                                                name={`barang_id`} // Nama yang sesuai dengan field di state
-                                                value={item.barang_id} // Gunakan item.barang_id
+                                                name={`barang_id`}
+                                                value={item.barang_id}
                                                 className="mt-1 block w-full"
                                                 onChange={(e) =>
                                                     handleItemChange(
@@ -235,7 +245,7 @@ export default function Create({ auth, barangs, metodePembayarans, flash }) {
                                                         "barang_id",
                                                         e.target.value
                                                     )
-                                                } // Kirim field 'barang_id'
+                                                }
                                                 required
                                             >
                                                 <option value="">
@@ -274,8 +284,6 @@ export default function Create({ auth, barangs, metodePembayarans, flash }) {
                                             )}
                                         </div>
                                         <div className="w-auto">
-                                            {" "}
-                                            {/* Ubah w-full md:w-1/5 menjadi w-auto */}
                                             <InputLabel
                                                 htmlFor={`jumlah_${index}`}
                                                 value="Jumlah"
@@ -285,16 +293,15 @@ export default function Create({ auth, barangs, metodePembayarans, flash }) {
                                                 type="number"
                                                 name="jumlah"
                                                 min="1"
-                                                // max={item.stok} // max di HTML input tidak seakurat validasi backend
                                                 value={item.jumlah}
-                                                className="mt-1 block w-24" // Lebar tetap 24 unit
+                                                className="mt-1 block w-24"
                                                 onChange={(e) =>
                                                     handleItemChange(
                                                         index,
                                                         "jumlah",
                                                         e.target.value
                                                     )
-                                                } // Kirim field 'jumlah'
+                                                }
                                                 required
                                             />
                                             {errors[
@@ -311,21 +318,17 @@ export default function Create({ auth, barangs, metodePembayarans, flash }) {
                                             )}
                                         </div>
                                         <div className="w-auto">
-                                            {" "}
-                                            {/* Ubah w-48 pt-6 menjadi w-auto */}
                                             <InputLabel value="Harga Satuan" />
                                             <TextInput
                                                 type="text"
                                                 value={`Rp. ${parseFloat(
                                                     item.harga_satuan
                                                 ).toLocaleString("id-ID")}`}
-                                                className="mt-1 block w-48 bg-gray-100 cursor-not-allowed" // Lebar tetap 48 unit
+                                                className="mt-1 block w-48 bg-gray-100 cursor-not-allowed"
                                                 readOnly
                                             />
                                         </div>
                                         <div className="w-auto flex justify-end">
-                                            {" "}
-                                            {/* pt-6 dihapus */}
                                             {data.items.length > 1 && (
                                                 <DangerButton
                                                     type="button"
@@ -347,27 +350,71 @@ export default function Create({ auth, barangs, metodePembayarans, flash }) {
                                     Tambah Barang Lain
                                 </PrimaryButton>
                             </div>
-
                             {/* Ringkasan Total */}
                             <div className="text-right text-2xl font-bold text-gray-900 mb-6">
                                 Total Harga: Rp.{" "}
                                 {calculateTotal().toLocaleString("id-ID")}
                             </div>
-
                             {/* Tombol Submit */}
                             <div className="flex justify-end">
                                 <PrimaryButton
                                     className="ms-4 py-3 px-6 text-lg"
                                     disabled={processing}
                                 >
-                                    Simpan Transaksi
+                                    Proses Pembayaran
                                 </PrimaryButton>
                             </div>
                         </form>
                     </div>
                 </div>
             </div>
-            <ToastContainer /> {/* Pastikan ToastContainer ada di sini */}
+
+            {/* Modal untuk Pembayaran QRIS Simulasi */}
+            <Modal
+                show={showingPaymentModal}
+                onClose={() => setShowingPaymentModal(false)}
+            >
+                <div className="p-6 text-center">
+                    <h2 className="text-2xl font-bold text-gray-900 mb-4">
+                        Pembayaran QRIS
+                    </h2>
+                    <p className="text-gray-700 mb-4">
+                        Pindai QRIS ini untuk menyelesaikan pembayaran:
+                    </p>
+                    <img
+                        src="/images/qris_placeholder.png"
+                        alt="QRIS Placeholder"
+                        className="mx-auto w-48 h-48 mb-4 border border-gray-300 p-2"
+                    />{" "}
+                    {/* Ganti dengan path QRIS Anda */}
+                    <p className="text-lg font-semibold text-gray-800 mb-2">
+                        Total: Rp.{" "}
+                        {transactionDetailsForPayment?.total.toLocaleString(
+                            "id-ID"
+                        )}
+                    </p>
+                    <p className="text-sm text-gray-600 mb-6">
+                        Metode: {transactionDetailsForPayment?.metode}
+                    </p>
+                    <p className="text-sm text-red-500 mb-6">
+                        Ini adalah simulasi pembayaran. Untuk integrasi
+                        pembayaran sesungguhnya, diperlukan penyedia payment
+                        gateway (Midtrans, Xendit, Doku, dll.) dan penanganan
+                        webhook.
+                    </p>
+                    <div className="flex justify-center gap-4">
+                        <SecondaryButton
+                            onClick={() => setShowingPaymentModal(false)}
+                        >
+                            Batal Pembayaran
+                        </SecondaryButton>
+                        <PrimaryButton onClick={handlePaymentConfirmation}>
+                            Konfirmasi Pembayaran Manual
+                        </PrimaryButton>
+                    </div>
+                </div>
+            </Modal>
+            <ToastContainer />
         </AuthenticatedLayout>
     );
 }
