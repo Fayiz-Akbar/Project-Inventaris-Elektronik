@@ -4,8 +4,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\KategoriController;
 use App\Http\Controllers\BarangController;
 use App\Http\Controllers\DashboardController;
-// Pastikan controller baru ini sudah di-import
-use App\Http\Controllers\TransaksiController;
+use App\Http\Controllers\PenjualanController; 
 use App\Http\Controllers\LaporanController;
 
 use Illuminate\Foundation\Application;
@@ -53,19 +52,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
         'destroy' => 'barang.destroy',
     ]);
 
-    // ===== BAGIAN YANG KITA UBAH DIMULAI DI SINI =====
-
-    // Rute untuk Transaksi
-    // Rute untuk Transaksi (Dengan nama yang sudah diperbaiki)
-Route::get('/transaksi/baru', [TransaksiController::class, 'create'])->name('transaksi.create'); // <-- PASTIKAN NAMANYA INI
-Route::post('/transaksi/baru', [TransaksiController::class, 'store'])->name('transaksi.simpan');
-
+    // Rute untuk Transaksi Penjualan
+    Route::get('/transaksi/baru', [PenjualanController::class, 'create'])->name('transaksi.baru');
+    Route::post('/transaksi', [PenjualanController::class, 'store'])->name('transaksi.simpan');
 
     // Rute untuk Laporan
     Route::get('/laporan/penjualan', [LaporanController::class, 'index'])->name('laporan.penjualan');
 
-    // ===== AKHIR BAGIAN YANG DIUBAH =====
-
 });
 
-require __DIR__.'/auth.php'; // Rute autentikasi dari Breeze
+require __DIR__.'/auth.php'; // Rute autentikasi dari Laravel Breeze
