@@ -97,12 +97,14 @@
 
         <div class="separator"></div>
         <table>
-            <tr><td class="text-left">Total Harga :</td><td class="text-right"><b>Rp{{ number_format($penjualan->total_harga, 0, ',', '.') }}</b></td></tr>
-            <tr><td class="text-left">Metode Pembayaran :</td><td class="text-right">{{ $penjualan->metodePembayaran->nama_metode }}</td></tr>
-            <tr><td class="text-left">Uang Bayar :</td><td class="text-right">Rp{{ number_format($penjualan->total_harga, 0, ',', '.') }}</td></tr>
-            <tr><td class="text-left">Kembalian :</td><td class="text-right">Rp{{ number_format(0, 0, ',', '.') }}</td></tr>
+            <tr><td class="text-left">Total Harga</td><td class="text-right"><b>Rp{{ number_format($penjualan->total_harga, 0, ',', '.') }}</b></td></tr>
+            <tr><td class="text-left">Metode Pembayaran</td><td class="text-right">{{ $penjualan->metodePembayaran->nama_metode }}</td></tr>
+            <tr><td class="text-left">Uang Bayar</td><td class="text-right">Rp{{ number_format($penjualan->total_harga, 0, ',', '.') }}</td></tr>
+            <tr><td class="text-left">Kembalian</td><td class="text-right">Rp{{ number_format(0, 0, ',', '.') }}</td></tr>
         </table>
 
+        <div class="separator"></div>
+        
         <div class="footer">
             <p><b>Terima Kasih telah Berbelanja!</b></p>
             <p style="font-size: 8pt; margin-top: 5px;">Barang yang sudah dibeli tidak dapat ditukar atau dikembalikan.</p>
