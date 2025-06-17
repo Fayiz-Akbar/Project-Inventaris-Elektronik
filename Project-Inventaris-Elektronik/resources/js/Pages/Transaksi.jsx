@@ -57,6 +57,25 @@ export default function Transaksi({ auth, barangs, metodePembayarans, flash }) {
         });
     };
 
+    const handleProcessPayment = (e) => {
+        e.preventDefault();
+        // Validasi sederhana sebelum membuka modal
+        if (data.items.some(item => !item.id) || !data.metode_pembayaran_id) {
+            alert('Silakan pilih barang dan metode pembayaran terlebih dahulu.');
+            return;
+        }
+        setIsModalOpen(true);
+    };
+
+    const handleConfirmAndSubmit = () => {
+        post(route('transaksi.simpan'), {
+            // onSuccess tidak perlu reset form karena kita akan redirect ke halaman struk
+            onFinish: () => {
+                setIsModalOpen(false); // Tutup modal setelah proses selesai
+            },
+        });
+    };
+
     return (
         <AuthenticatedLayout
             user={auth.user}

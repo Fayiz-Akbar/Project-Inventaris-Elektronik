@@ -2,104 +2,102 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Penjualan;
+// Pengelompokan 'use' statements agar rapi
 use App\Models\Barang;
 use App\Models\MetodePembayaran;
+use App\Models\Penjualan;
 use Illuminate\Http\Request;
-use Inertia\Inertia;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Response; // Ini untuk PDF
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\ValidationException;
+use Inertia\Inertia;
+use Inertia\Response as InertiaResponse; // Ini untuk halaman React
+use Barryvdh\DomPDF\Facade\Pdf;
 
 class PenjualanController extends Controller
 {
-    /**
-     * Menampilkan halaman form untuk membuat transaksi baru.
-     */
-    public function create()
+    // Method untuk menampilkan form transaksi
+    public function create(): InertiaResponse
     {
-        // Mengambil data barang yang stoknya masih ada dan semua metode pembayaran
-        $barangs = Barang::select('id', 'nama_barang', 'harga', 'stok')->orderBy('nama_barang')->get();
-        $metodePembayarans = MetodePembayaran::select('id', 'nama_metode')->orderBy('nama_metode')->get();
-
         return Inertia::render('Transaksi/Create', [
-            'barangs' => $barangs,
-            'metodePembayarans' => $metodePembayarans,
+            'barangs' => Barang::where('stok', '>', 0)->select('id', 'nama_barang', 'harga', 'stok')->get(),
+            'metodePembayarans' => MetodePembayaran::select('id', 'nama_metode')->get(),
         ]);
     }
 
-    /**
-     * Menyimpan transaksi baru ke database setelah dikonfirmasi di frontend.
-     */
+    // Method untuk menyimpan transaksi
     public function store(Request $request): RedirectResponse
     {
-        // 1. Validasi data yang masuk dari form
-        $request->validate([
-            'nama_pelanggan' => 'nullable|string|max:255',
+        Validator::make($request->all(), [
             'metode_pembayaran_id' => 'required|exists:metode_pembayarans,id',
             'items' => 'required|array|min:1',
-            'items.*.barang_id' => 'required|exists:barangs,id',
+            'items.*.id' => 'required|exists:barangs,id',
             'items.*.jumlah' => 'required|integer|min:1',
-        ], [
-            // Pesan error kustom untuk kejelasan
-            'metode_pembayaran_id.required' => 'Metode pembayaran wajib dipilih.',
-            'items.required' => 'Minimal harus ada satu barang dalam transaksi.',
-            'items.*.barang_id.required' => 'Barang pada daftar tidak boleh kosong.',
-            'items.*.jumlah.min' => 'Jumlah barang minimal 1.',
-        ]);
+        ])->validate();
 
-        // 2. Gunakan DB Transaction untuk memastikan semua query berhasil atau tidak sama sekali
+        $penjualan = null;
+
         DB::beginTransaction();
         try {
-            $totalHarga = 0;
-
-            // 3. Loop untuk validasi stok dan menghitung total harga
+            $total_harga = 0;
+            $validatedItems = [];
             foreach ($request->items as $item) {
-                // Kunci barang untuk mencegah race condition (opsional tapi praktik yang baik)
-                $barang = Barang::lockForUpdate()->find($item['barang_id']);
-
+                $barang = Barang::find($item['id']);
                 if ($barang->stok < $item['jumlah']) {
-                    // Jika stok tidak cukup, batalkan semua proses dan kirim pesan error
-                    DB::rollBack();
-                    return redirect()->back()->with('error', 'Stok ' . $barang->nama_barang . ' tidak mencukupi. Stok tersedia: ' . $barang->stok);
+                    throw ValidationException::withMessages([
+                        'stok' => 'Stok untuk barang "' . $barang->nama_barang . '" tidak mencukupi. Sisa stok: ' . $barang->stok,
+                    ]);
                 }
-
-                $totalHarga += $barang->harga * $item['jumlah'];
+                $subtotal = $barang->harga * $item['jumlah'];
+                $total_harga += $subtotal;
+                $validatedItems[] = ['barang' => $barang, 'jumlah' => $item['jumlah'], 'subtotal' => $subtotal];
             }
-
-            // 4. Buat record utama di tabel 'penjualans'
-            $penjualan = Penjualan::create([
-                'user_id' => Auth::id(),
-                'metode_pembayaran_id' => $request->metode_pembayaran_id,
-                'nama_pelanggan' => $request->nama_pelanggan,
-                'tanggal_penjualan' => now(),
-                'total_harga' => $totalHarga,
-            ]);
-
-            // 5. Simpan setiap item ke 'detail_penjualans' dan kurangi stok
-            foreach ($request->items as $item) {
-                $barang = Barang::find($item['barang_id']); // Ambil ulang barang (tanpa lock)
-                $penjualan->details()->create([
-                    'barang_id' => $barang->id,
-                    'jumlah' => $item['jumlah'],
-                    'harga_satuan' => $barang->harga,
-                    'subtotal' => $barang->harga * $item['jumlah'],
-                ]);
-
-                // Kurangi stok barang terkait
-                $barang->decrement('stok', $item['jumlah']);
+            $penjualan = Penjualan::create(['user_id' => Auth::id(), 'metode_pembayaran_id' => $request->metode_pembayaran_id, 'nama_pelanggan' => $request->nama_pelanggan, 'total_harga' => $total_harga, 'tanggal_penjualan' => now()]);
+            foreach ($validatedItems as $item) {
+                $penjualan->details()->create(['barang_id' => $item['barang']->id, 'jumlah' => $item['jumlah'], 'harga_satuan' => $item['barang']->harga, 'subtotal' => $item['subtotal']]);
+                $item['barang']->decrement('stok', $item['jumlah']);
             }
-
-            // Jika semua proses berhasil, simpan permanen ke database
             DB::commit();
-
-            // Kembalikan ke halaman transaksi dengan pesan sukses
-            return redirect()->route('transaksi.baru')->with('success', 'Transaksi berhasil disimpan!');
         } catch (\Exception $e) {
-            // Jika terjadi error di tengah jalan, batalkan semua perubahan
             DB::rollBack();
-            // Kembalikan dengan pesan error umum
-            return redirect()->back()->with('error', 'Gagal menyimpan transaksi: ' . $e->getMessage());
+            if ($e instanceof ValidationException) { throw $e; }
+            return redirect()->back()->with('error', 'Terjadi kesalahan sistem: ' . $e->getMessage());
+        }
+        return redirect()->route('transaksi.struk', ['penjualan' => $penjualan->id])->with('message', 'Transaksi berhasil!');
+    }
+
+    // Method untuk menampilkan halaman struk (React)
+    public function showStruk(Penjualan $penjualan): InertiaResponse
+    {
+        $penjualan->load(['details.barang', 'metodePembayaran', 'user']);
+        return Inertia::render('Struk', ['penjualan' => $penjualan]);
+    }
+
+    // Method untuk membuat dan mengirim PDF
+    public function cetakPdf(Penjualan $penjualan): Response
+    {
+        try {
+            $penjualan->load(['details.barang', 'metodePembayaran', 'user']);
+            
+            $paperWidth = 80 * 2.83;
+
+            $paperHeight = 841.89;
+            $customPaper = array(0, 0, $paperWidth, $paperHeight);
+
+            $pdf = Pdf::loadView('transaksi.struk_pdf', ['penjualan' => $penjualan])
+                       ->setPaper($customPaper, 'portrait');
+
+            $fileName = 'struk-' . $penjualan->id . '-' . now()->format('Ymd') . '.pdf';
+
+            return response($pdf->output())
+                ->header('Content-Type', 'application/pdf')
+                ->header('Content-Disposition', 'inline; filename="' . $fileName . '"');
+
+        } catch (\Exception $e) {
+            return new Response('<h1>Gagal membuat PDF</h1><p>Error: ' . $e->getMessage() . '</p>', 500);
         }
     }
 }

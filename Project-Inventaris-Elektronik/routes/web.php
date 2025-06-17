@@ -56,6 +56,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/transaksi/baru', [PenjualanController::class, 'create'])->name('transaksi.baru');
     Route::post('/transaksi', [PenjualanController::class, 'store'])->name('transaksi.simpan');
 
+    Route::get('/transaksi/{penjualan}/struk', [PenjualanController::class, 'showStruk'])->name('transaksi.struk');
+
+    Route::get('/transaksi/{penjualan}/cetak-pdf', [PenjualanController::class, 'cetakPdf'])->name('transaksi.cetak_pdf');
+
     // Rute untuk Laporan
     Route::get('/laporan/penjualan', [LaporanController::class, 'index'])->name('laporan.penjualan');
 

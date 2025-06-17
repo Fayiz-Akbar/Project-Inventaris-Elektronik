@@ -94,6 +94,7 @@ export default function Laporan({ auth, laporan, filters, admins, metodePembayar
                                 <thead className="bg-gray-50">
                                     <tr>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Struk</th>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tanggal</th>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Admin</th>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Metode</th>
@@ -104,6 +105,14 @@ export default function Laporan({ auth, laporan, filters, admins, metodePembayar
                                     {laporan.data.map(row => (
                                         <tr key={row.id} className="hover:bg-gray-50">
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{row.id}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                                <Link
+                                                    href={route('transaksi.struk', { penjualan: row.id })}
+                                                    className="text-indigo-600 hover:text-indigo-900"
+                                                >
+                                                    Detail
+                                                </Link>
+                                            </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{new Date(row.tanggal_penjualan).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{row.user ? row.user.name : 'N/A'}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{row.metode_pembayaran ? row.metode_pembayaran.nama_metode : 'N/A'}</td>
