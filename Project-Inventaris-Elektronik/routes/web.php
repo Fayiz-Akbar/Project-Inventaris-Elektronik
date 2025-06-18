@@ -67,12 +67,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Route POST untuk menyimpan data transaksi baru
     Route::post('/transaksi', [PenjualanController::class, 'store'])->name('transaksi.simpan');
 
+    Route::get('/transaksi/{penjualan}/struk', [PenjualanController::class, 'showStruk'])->name('transaksi.struk');
+
+    Route::get('/transaksi/{penjualan}/cetak-pdf', [PenjualanController::class, 'cetakPdf'])->name('transaksi.cetak_pdf');
+    
     // Rute untuk Laporan Penjualan
     // Route GET untuk menampilkan halaman laporan penjualan dengan filter
     Route::get('/laporan/penjualan', [LaporanController::class, 'index'])->name('laporan.penjualan');
     // Route GET untuk mengunduh laporan penjualan dalam format PDF
     Route::get('/laporan/penjualan/export-pdf', [LaporanController::class, 'exportPdf'])->name('laporan.exportPdf');
 
+        
 });
 
 // Menyertakan rute autentikasi bawaan dari Laravel Breeze
